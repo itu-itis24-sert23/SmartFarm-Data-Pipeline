@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: smartfarm
+      POSTGRES_PASSWORD: smartfarm
+      POSTGRES_DB: smartfarm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - smartfarm_net
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@smartfarm.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_CHECK_EMAIL_DELIVERABILITY: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - smartfarm_net
+    ports:
+      - "5050:80"
+
+  nifi:
+    image: apache/nifi:latest
+    container_name: nifi
+    environment:
+      - NIFI_WEB_HTTPS_PORT=8443
+      - SINGLE_USER_CREDENTIALS_USERNAME=nifi
+      - SINGLE_USER_CREDENTIALS_PASSWORD=NifiNifi_12345!
+    volumes:
+      - nifi_data:/opt/nifi/nifi-current/conf
+      - generator_data:/data/input
+    networks:
+      - smartfarm_net
+    ports:
+      - "8443:8443"
+
+
+  airflow:
+    image: apache/airflow:2.9.3-python3.11
+    container_name: airflow-standalone
+    command: standalone
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://smartfarm:smartfarm@postgres:5432/smartfarm
+      - _PIP_ADDITIONAL_REQUIREMENTS=faker
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts:/opt/scripts
+      - generator_data:/data/input
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      - postgres
+    networks:
+      - smartfarm_net
+    ports:
+      - "8082:8080"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - smartfarm_net
+    ports:
+      - "9200:9200"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.2
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - smartfarm_net
+    ports:
+      - "5601:5601"
+
+  jupyter:
+    image: jupyter/scipy-notebook
+    container_name: jupyter_server
+    volumes:
+      - ./data:/home/jovyan/work
+    networks:
+      - smartfarm_net
+    ports:
+      - "8888:8888"
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  es_data:
+  nifi_data:
+  airflow_logs:
+  generator_data:
+
+networks:
+  smartfarm_net:
+    driver: bridge

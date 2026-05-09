@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NiFi template (design) for SmartFarm ingestion & routing
+     -> GetFile (monitor /data/input)
+     -> ParseRecord / EvaluateJsonPath
+     -> RouteOnAttribute (domain == livestock / crop / irrigation / worker)
+       - anomalies -> PutDatabaseRecord -> alerts table
+       - normals -> PutDatabaseRecord -> respective domain tables
+
+  This XML is a placeholder design. Import into NiFi UI and create processors:
+  - GetFile (Input Directory = /data/input)
+  - EvaluateJsonPath to extract domain and key attributes
+  - RouteOnAttribute with rules for anomalies (temperature>39, moisture<15, status==overdue, etc.)
+  - PutDatabaseRecord (JDBC connection to Postgres) for domain tables and alerts
+-->
+<template>
+  <description>SmartFarm ingestion template (design placeholder)</description>
+  <name>smartfarm-ingest-design</name>
+</template>
