@@ -31,9 +31,19 @@ Retrieve the auto-generated admin password:
 docker exec -it airflow-standalone cat /opt/airflow/standalone_admin_password.txt
 
 ```
-
 * **URL:** `http://localhost:8082`
 * **Username:** `admin`
+* **Password:** (from above command)
+or
+
+```bash
+docker exec airflow-standalone airflow users delete --username admin
+docker exec airflow-standalone airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.org --password admin
+```
+* **URL:** `http://localhost:8082`
+* **Username:** `admin`
+* **Password:** `admin`
+
 
 **Permissions Fix:** If you encounter a `Permission Denied` error during DAG execution, run:
 
