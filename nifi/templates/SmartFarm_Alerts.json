@@ -1,0 +1,154 @@
+{
+  "flowContents": {
+    "identifier": "ac33364d-763f-3bce-8521-fb6a3e53b785",
+    "instanceIdentifier": "0b38cca3-019e-1000-4930-e8e544b33dc2",
+    "name": "SmartFarm Flow with Alerts",
+    "comments": "",
+    "position": { "x": 0.0, "y": 0.0 },
+    "processGroups": [],
+    "remoteProcessGroups": [],
+    "processors": [
+      {
+        "identifier": "777a7dd2-b891-31df-89da-2424d998a233",
+        "instanceIdentifier": "0b4b1eb5-019e-1000-db78-a24368b87a78",
+        "name": "GetFile",
+        "comments": "",
+        "position": { "x": -61.0, "y": -194.5 },
+        "type": "org.apache.nifi.processors.standard.GetFile",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-standard-nar", "version": "2.8.0" },
+        "properties": {
+          "Input Directory": "/data/input",
+          "File Filter": "generator_output.jsonl",
+          "Keep Source File": "true"
+        },
+        "scheduledState": "ENABLED"
+      },
+      {
+        "identifier": "2cb2b42b-0926-3c22-beaf-f6466b6bbb68",
+        "instanceIdentifier": "0b4bcc15-019e-1000-bf70-4ea68f85e904",
+        "name": "SplitText",
+        "comments": "",
+        "position": { "x": 8.0, "y": 72.0 },
+        "type": "org.apache.nifi.processors.standard.SplitText",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-standard-nar", "version": "2.8.0" },
+        "properties": { "Line Split Count": "1" },
+        "scheduledState": "ENABLED"
+      },
+      {
+        "identifier": "728029fa-1b2f-3e09-a119-d81f01d2688c",
+        "instanceIdentifier": "0b4c27b4-019e-1000-ad6e-5e25e29cc7b6",
+        "name": "EvaluateJsonPath",
+        "comments": "",
+        "position": { "x": -24.0, "y": 344.0 },
+        "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-standard-nar", "version": "2.8.0" },
+        "properties": {
+          "Destination": "flowfile-attributes",
+          "domain": "$.domain",
+          "animal_id": "$.animal_id",
+          "temperature": "$.temperature",
+          "health_status": "$.health_status",
+          "moisture_level": "$.moisture_level",
+          "status": "$.status",
+          "plot_id": "$.plot_id",
+          "worker_id": "$.worker_id",
+          "task": "$.task",
+          "recorded_at": "$.recorded_at"
+        },
+        "scheduledState": "ENABLED"
+      },
+      {
+        "identifier": "anomaly-router-001",
+        "instanceIdentifier": "anomaly-router-001",
+        "name": "RouteOnAttribute_Anomaly",
+        "comments": "Routes anomalies",
+        "position": { "x": 50.0, "y": 480.0 },
+        "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-standard-nar", "version": "2.8.0" },
+        "properties": {
+          "anomaly": "${health_status:equals('critical'):or(${moisture_level:lt(15)}):or(${status:equals('overdue')})}",
+          "normal": "true"
+        },
+        "scheduledState": "ENABLED"
+      },
+      {
+        "identifier": "bfd1e994-952a-3e8f-ba70-fbd20b86762a",
+        "instanceIdentifier": "0b9b2d77-019e-1000-1ff6-7ac960a23de1",
+        "name": "PutDatabaseRecord_Normal",
+        "comments": "",
+        "position": { "x": 120.0, "y": 620.0 },
+        "type": "org.apache.nifi.processors.standard.PutDatabaseRecord",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-standard-nar", "version": "2.8.0" },
+        "properties": {
+          "Database Connection Pooling Service": "7bc147a7-91ac-33cb-aaee-973fb667527a",
+          "Record Reader": "6aa0ccc0-ebe6-3a8d-8dbc-c41d8e91940b",
+          "Statement Type": "INSERT",
+          "Table Name": "${domain}"
+        },
+        "scheduledState": "ENABLED"
+      },
+      {
+        "identifier": "alerts-writer-001",
+        "instanceIdentifier": "alerts-writer-001",
+        "name": "PutDatabaseRecord_Alerts",
+        "comments": "Alerts table",
+        "position": { "x": 120.0, "y": 720.0 },
+        "type": "org.apache.nifi.processors.standard.PutDatabaseRecord",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-standard-nar", "version": "2.8.0" },
+        "properties": {
+          "Database Connection Pooling Service": "7bc147a7-91ac-33cb-aaee-973fb667527a",
+          "Record Reader": "6aa0ccc0-ebe6-3a8d-8dbc-c41d8e91940b",
+          "Statement Type": "INSERT",
+          "Table Name": "alerts"
+        },
+        "scheduledState": "ENABLED"
+      }
+    ],
+    "connections": [
+      {
+        "source": { "id": "777a7dd2-b891-31df-89da-2424d998a233", "relationship": "success" },
+        "destination": { "id": "2cb2b42b-0926-3c22-beaf-f6466b6bbb68" }
+      },
+      {
+        "source": { "id": "2cb2b42b-0926-3c22-beaf-f6466b6bbb68", "relationship": "splits" },
+        "destination": { "id": "728029fa-1b2f-3e09-a119-d81f01d2688c" }
+      },
+      {
+        "source": { "id": "728029fa-1b2f-3e09-a119-d81f01d2688c", "relationship": "matched" },
+        "destination": { "id": "anomaly-router-001" }
+      },
+      {
+        "source": { "id": "anomaly-router-001", "relationship": "anomaly" },
+        "destination": { "id": "alerts-writer-001" }
+      },
+      {
+        "source": { "id": "anomaly-router-001", "relationship": "normal" },
+        "destination": { "id": "bfd1e994-952a-3e8f-ba70-fbd20b86762a" }
+      }
+    ],
+    "controllerServices": [
+      {
+        "identifier": "7bc147a7-91ac-33cb-aaee-973fb667527a",
+        "name": "DBCPConnectionPool",
+        "type": "org.apache.nifi.dbcp.DBCPConnectionPool",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-dbcp-service-nar", "version": "2.8.0" },
+        "properties": {
+          "Database Connection URL": "jdbc:postgresql://postgres-db:5432/smartfarm",
+          "Database Driver Class Name": "org.postgresql.Driver",
+          "Database User": "smartfarm",
+          "Password": "smartfarm",
+          "Database Driver Locations": "/opt/nifi/nifi-current/lib/postgresql-42.7.3.jar"
+        },
+        "scheduledState": "ENABLED"
+      },
+      {
+        "identifier": "6aa0ccc0-ebe6-3a8d-8dbc-c41d8e91940b",
+        "name": "JsonTreeReader",
+        "type": "org.apache.nifi.json.JsonTreeReader",
+        "bundle": { "group": "org.apache.nifi", "artifact": "nifi-record-serialization-services-nar", "version": "2.8.0" },
+        "properties": { "Schema Access Strategy": "infer-schema" },
+        "scheduledState": "ENABLED"
+      }
+    ]
+  }
+}
