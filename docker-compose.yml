@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: smartfarm
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - smartfarm_net
     ports:
@@ -47,6 +48,7 @@ services:
       - SINGLE_USER_CREDENTIALS_PASSWORD=NifiNifi_12345!
     volumes:
       - generator_data:/data/input
+      - ./libs/postgresql-42.7.3.jar:/opt/nifi/nifi-current/lib/postgresql-42.7.3.jar
     networks:
       - smartfarm_net
     ports:
