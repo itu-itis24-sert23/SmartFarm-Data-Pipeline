@@ -10,11 +10,16 @@ services:
       POSTGRES_DB: smartfarm
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - smartfarm_net
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartfarm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -31,6 +36,7 @@ services:
       - smartfarm_net
     ports:
       - "5050:80"
+    restart: unless-stopped
 
   nifi:
     image: apache/nifi:latest
@@ -40,34 +46,14 @@ services:
       - SINGLE_USER_CREDENTIALS_USERNAME=nifi
       - SINGLE_USER_CREDENTIALS_PASSWORD=NifiNifi_12345!
     volumes:
-      - nifi_data:/opt/nifi/nifi-current/conf
       - generator_data:/data/input
     networks:
       - smartfarm_net
     ports:
       - "8443:8443"
-
-
-  airflow:
-    image: apache/airflow:2.9.3-python3.11
-    container_name: airflow-standalone
-    command: standalone
-    environment:
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://smartfarm:smartfarm@postgres:5432/smartfarm
-      - _PIP_ADDITIONAL_REQUIREMENTS=faker
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./scripts:/opt/scripts
-      - generator_data:/data/input
-      - airflow_logs:/opt/airflow/logs
     depends_on:
       - postgres
-    networks:
-      - smartfarm_net
-    ports:
-      - "8082:8080"
+    restart: unless-stopped
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
@@ -86,6 +72,7 @@ services:
       - smartfarm_net
     ports:
       - "9200:9200"
+    restart: unless-stopped
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.2
@@ -98,6 +85,72 @@ services:
       - smartfarm_net
     ports:
       - "5601:5601"
+    restart: unless-stopped
+
+  airflow-init:
+    image: apache/airflow:2.9.3-python3.11
+    container_name: airflow-init
+    command: >
+      bash -c "airflow db init && airflow db upgrade"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://smartfarm:smartfarm@postgres:5432/smartfarm
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts:/opt/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - smartfarm_net
+    restart: "no"
+
+  airflow-webserver:
+    image: apache/airflow:2.9.3-python3.11
+    container_name: airflow-webserver
+    command: webserver
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://smartfarm:smartfarm@postgres:5432/smartfarm
+      - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=UTC
+      - _PIP_ADDITIONAL_REQUIREMENTS=faker
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts:/opt/scripts
+      - generator_data:/data/input
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - smartfarm_net
+    ports:
+      - "8082:8080"
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.3-python3.11
+    container_name: airflow-scheduler
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://smartfarm:smartfarm@postgres:5432/smartfarm
+      - _PIP_ADDITIONAL_REQUIREMENTS=faker
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts:/opt/scripts
+      - generator_data:/data/input
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - smartfarm_net
+    restart: unless-stopped
 
   jupyter:
     image: jupyter/scipy-notebook
@@ -108,12 +161,12 @@ services:
       - smartfarm_net
     ports:
       - "8888:8888"
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   pgadmin_data:
   es_data:
-  nifi_data:
   airflow_logs:
   generator_data:
 
